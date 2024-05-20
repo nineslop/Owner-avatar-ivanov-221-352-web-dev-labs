@@ -64,14 +64,14 @@ def check_passwd(passwd):
         return 'Пароль должен содержать не менее 8 символов'
     elif len(passwd) > 128:
         return 'Пароль не должен превышать 128 символов'
+    elif ' ' in passwd:
+        return 'Пароль не должен содержать пробелы'
     elif not any([char in upper_letters for char in passwd]) or not any([char in lower_letters for char in passwd]):
         return 'Пароль должен состоять как минимум из одной заглавной и одной строчной буквы'
     elif not all([char in (upper_letters + lower_letters + perm_letters + string.digits) for char in passwd]):
         return 'Пароль должен состоять только из латинских или кириллических букв'
     elif not any([char in string.digits for char in passwd]):
         return 'Пароль должен состоять хотя бы из одной цифры'
-    elif ' ' in passwd:
-        return 'Пароль не должен содержать пробелы'
     
     return None
 
@@ -150,15 +150,36 @@ def createuser():
         return redirect(url_for('userlist'))
 
 
-@app.route('/user/show/<int:user_id>')
+@app.route('/user/show/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def show_user(user_id):
+    if request.method == 'POST':
+        # Обработка данных формы
+        first_name = request.form.get('first_name')
+        last_name = request.form.get('last_name')
+        middle_name = request.form.get('middle_name')
+
+        cursor = db.connection().cursor()
+        query = '''
+            UPDATE users3
+            SET first_name=%s, last_name=%s, middle_name=%s
+            WHERE id=%s
+        '''
+        cursor.execute(query, (first_name, last_name, middle_name, user_id))
+        db.connection().commit()
+        cursor.close()
+
+        flash('Информация о пользователе обновлена', 'success')
+        return redirect(url_for('show_user', user_id=user_id))
+    
     cursor = db.connection().cursor(named_tuple=True)
     query = 'SELECT id, login, first_name, last_name, middle_name FROM users3 WHERE id=%s'
     cursor.execute(query, (user_id,))
     user = cursor.fetchone()
     cursor.close()
+
     return render_template('show_user.html', user=user)
+
 
 
 
@@ -244,11 +265,6 @@ def change_password(user_id):
         flash('Пароль пользователя изменен','success')
         return redirect(url_for('userlist'))
     
-    """cursor = db.connection().cursor(named_tuple=True)
-    query = 'SELECT id, login, first_name, last_name FROM users3 WHERE id=%s'
-    cursor.execute(query, (user_id,))
-    user = cursor.fetchone()
-    cursor.close()
-    return render_template('change_password.html', user=user)"""
+    
     return render_template('change_password.html')
 
