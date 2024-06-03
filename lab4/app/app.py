@@ -1,5 +1,5 @@
 from flask import Flask, render_template,url_for, request, session, redirect, flash
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from mysql_db import MySQL
 import string
 import hashlib
@@ -129,32 +129,36 @@ def createuser():
         login = request.form['login']
         first_name = request.form['first_name']
         last_name = request.form['last_name']
+        middle_name = request.form['middle_name']
         password = request.form['password']
-        if check_login(login) != None or check_passwd(password) != None or first_name == '' or last_name == '':
-            if first_name == '':
+        
+        error_login = check_login(login)
+        error_passwd = check_passwd(password)
+        
+        if error_login or error_passwd or not first_name or not last_name:
+            if not first_name:
                 error_first_name = 'Поле не может быть пустым'
-            if last_name == '':
+            if not last_name:
                 error_last_name = 'Поле не может быть пустым'
-            error_login = check_login(login)
-            error_passwd = check_passwd(password)
-            flash('Пользователь не создан','danger')
+            flash('Пользователь не создан', 'danger')
             return render_template('createuser.html', error_login=error_login, error_passwd=error_passwd, 
                                    error_first_name=error_first_name, error_last_name=error_last_name)
+        
         cursor = db.connection().cursor(named_tuple=True)
-        query = 'INSERT INTO users3 (login, password_hash, first_name, last_name) VALUES (%s, SHA2(%s, 256), %s, %s)'
-        values = (login, password, first_name, last_name)
+        query = 'INSERT INTO users3 (login, password_hash, first_name, last_name, middle_name) VALUES (%s, SHA2(%s, 256), %s, %s, %s)'
+        values = (login, password, first_name, last_name, middle_name)
         cursor.execute(query, values)
         db.connection().commit()
         cursor.close()
-        flash('Пользователь успешно создан','success')
+        flash('Пользователь успешно создан', 'success')
         return redirect(url_for('userlist'))
+
 
 
 @app.route('/user/show/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 def show_user(user_id):
     if request.method == 'POST':
-        # Обработка данных формы
         first_name = request.form.get('first_name')
         last_name = request.form.get('last_name')
         middle_name = request.form.get('middle_name')
@@ -187,20 +191,22 @@ def show_user(user_id):
 @login_required
 def edit_user(user_id):
     if request.method == 'POST':
-        cursor = db.connection().cursor(named_tuple=True)
-        #login = request.form['login']
         first_name = request.form['first_name']
         last_name = request.form['last_name']
         middle_name = request.form['middle_name']
+
+        print(f"Received form data: {first_name}, {last_name}, {middle_name}")
+
+        cursor = db.connection().cursor(named_tuple=True)
         query = 'UPDATE users3 SET first_name=%s, last_name=%s, middle_name=%s WHERE id=%s'
         cursor.execute(query, (first_name, last_name, middle_name, user_id))
         db.connection().commit()
         cursor.close()
-        flash(f'Данные пользователя {login} изменены','success')
+        flash('Данные пользователя изменены', 'success')
         return redirect(url_for('userlist'))
     
     cursor = db.connection().cursor(named_tuple=True)
-    query = 'SELECT id, login, first_name, last_name FROM users3 WHERE id=%s'
+    query = 'SELECT id, login, first_name, last_name, middle_name FROM users3 WHERE id=%s'
     cursor.execute(query, (user_id,))
     user = cursor.fetchone()
     cursor.close()
@@ -231,9 +237,10 @@ def check_password_hash(stored_password_hash, provided_password):
     provided_password_hash = hashlib.sha256(provided_password.encode()).hexdigest()
     return provided_password_hash == stored_password_hash
 
-@app.route('/user/change/<int:user_id>', methods=["GET", "POST"])
+@app.route('/user/change', methods=["GET", "POST"])
 @login_required
-def change_password(user_id):
+def change_password():
+    user_id = current_user.id    
     error_old_passwd = None
     error_new_passwd = None
     error_both_passwd = None
@@ -264,7 +271,6 @@ def change_password(user_id):
         cursor.close()
         flash('Пароль пользователя изменен','success')
         return redirect(url_for('userlist'))
-    
     
     return render_template('change_password.html')
 
